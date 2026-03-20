@@ -81,7 +81,7 @@ export default function MatchLobby() {
     const [toast, setToast] = useState<{ msg: string; type: ToastType } | null>(null);
 
     const [bannedMaps, setBannedMaps] = useState<string[]>([]);
-    const [timeLeft, setTimeLeft] = useState(10); // <-- 1. Timer State
+    const [timeLeft, setTimeLeft] = useState(10);
 
     const isFetching = useRef(false);
     const stompClientRef = useRef<Client | null>(null);
@@ -123,7 +123,6 @@ export default function MatchLobby() {
     const currentPhase = Math.min(Math.floor(totalBans / 2) + 1, 5);
     const isHomeTurn = totalBans % 2 === 0;
 
-    // 2. Cleanly calculate whose turn it is
     const isMyTurn = useMemo(() => {
         if (!match || !user || match.status === 'OPEN' || match.mapSelectionMode !== 'VETO') {
             return false;
@@ -156,7 +155,6 @@ export default function MatchLobby() {
         return null;
     }, [match, user, isSolo]);
 
-    // 3. Tick the clock down every second
     useEffect(() => {
         if (!isMyTurn) {
             setTimeLeft(10);
@@ -170,7 +168,6 @@ export default function MatchLobby() {
         return () => clearInterval(timerId);
     }, [isMyTurn, totalBans]);
 
-    // 4. Auto-ban if they go AFK and time runs out
     useEffect(() => {
         if (isMyTurn && timeLeft === 0) {
             const availableMaps = ALL_MAPS.filter(m => !bannedMaps.includes(m));
@@ -181,14 +178,20 @@ export default function MatchLobby() {
         }
     }, [timeLeft, isMyTurn, bannedMaps]);
 
+    const rawWsUrl = import.meta.env.VITE_WS_URL || 'http://localhost:8080/ws';
+    const sockJsUrl = rawWsUrl.replace('wss://', 'https://').replace('ws://', 'http://');
+
     useEffect(() => {
         fetchLobby();
 
         const stompClient = new Client({
-            webSocketFactory: () => new SockJS(import.meta.env.VITE_WS_URL || 'http://localhost:8080/ws'),
+            webSocketFactory: () => new SockJS(sockJsUrl),
             reconnectDelay: 5000,
-            debug: () => {},
+            debug: (str) => {
+                console.log('STOMP: ' + str);
+            },
             onConnect: () => {
+                console.log('✅ STOMP CONNECTED PERFECTLY!');
                 stompClient.subscribe(`/topic/match-${matchId}`, (message) => {
                     if (message.body === 'DELETED') {
                         alert('This lobby has been deleted.');
@@ -336,13 +339,12 @@ export default function MatchLobby() {
         }
     };
 
-    // 5. Cleaned up handleBanMap
     const handleBanMap = async (mapName: string) => {
         if (!match || !isMyTurn || bannedMaps.includes(mapName)) return;
 
         if (stompClientRef.current?.connected) {
             stompClientRef.current.publish({
-                destination: `/app/matches/${matchId}/veto`, // Matches Backend Controller
+                destination: `/app/matches/${matchId}/veto`,
                 body: JSON.stringify({
                     mapName: mapName,
                     username: user?.username
