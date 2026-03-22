@@ -15,7 +15,7 @@ public class RabbitMQConfig {
 
     @Bean
     public Queue rankSyncQueue() {
-        return new Queue(RANK_SYNC_QUEUE, true); // true = durable (survives restarts)
+        return new Queue(RANK_SYNC_QUEUE, true);
     }
 
     @Bean

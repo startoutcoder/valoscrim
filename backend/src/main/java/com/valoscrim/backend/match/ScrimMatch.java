@@ -33,6 +33,9 @@ public class ScrimMatch {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Version
+    private Long version;
+
     @ManyToOne
     @JoinColumn(name = "team_home_id")
     private Team teamHome;

@@ -1,5 +1,8 @@
 package com.valoscrim.backend.match.controller;
 
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.messaging.handler.annotation.MessageExceptionHandler;
+import lombok.extern.slf4j.Slf4j;
 import com.valoscrim.backend.common.enums.ServerRegion;
 import com.valoscrim.backend.match.dto.*;
 import com.valoscrim.backend.match.service.MatchLineupService;
@@ -18,6 +21,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDateTime;
 import java.util.List;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/matches")
 @RequiredArgsConstructor
@@ -252,5 +256,10 @@ public class MatchController {
                 userDetails.getUsername()
         );
         return ResponseEntity.ok().build();
+    }
+
+    @MessageExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public void handleException(ObjectOptimisticLockingFailureException ex) {
+        log.warn("Blocked a concurrent veto request (Double click or network lag detected).");
     }
 }
