@@ -27,6 +27,8 @@ export default function CreateMatchFAB() {
         try {
             if (mode === 'SOLO') {
                 await api.post(`/matches/solo?mapSelectionMode=${mapSelectionMode}`);
+                window.dispatchEvent(new Event('match-created'));
+
                 setIsOpen(false);
                 navigate('/matches');
             } else {
