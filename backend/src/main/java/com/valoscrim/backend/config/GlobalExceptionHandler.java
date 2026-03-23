@@ -1,7 +1,9 @@
 package com.valoscrim.backend.config;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -69,6 +71,16 @@ public class GlobalExceptionHandler {
         log.error("An unexpected server error occurred: ", ex);
 
         return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected server error occurred.");
+    }
+
+    @ExceptionHandler({CannotAcquireLockException.class, PessimisticLockingFailureException.class})
+    public ResponseEntity<Map<String, Object>> handleLockAcquisitionFailure(Exception ex) {
+        log.warn("Lock acquisition failed (Fail-Fast): {}", ex.getMessage());
+
+        return buildErrorResponse(
+                HttpStatus.CONFLICT,
+                "Another player is attempting to change state. Please wait."
+        );
     }
 
     private ResponseEntity<Map<String, Object>> buildErrorResponse(HttpStatus status, String message) {

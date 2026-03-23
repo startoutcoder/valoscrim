@@ -10,14 +10,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
 
 @Slf4j
 @Service
@@ -26,56 +22,70 @@ public class RankSyncWorker {
 
     private final UserRepository userRepository;
     private final SimpMessagingTemplate messagingTemplate;
-    private final RestTemplate restTemplate = new RestTemplate();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Value("${henrik.api.key}")
     private String henrikApiKey;
 
-    private final String henrikApiUrl = "https://api.henrikdev.xyz/valorant";
+    private final WebClient webClient = WebClient.builder()
+            .baseUrl("https://api.henrikdev.xyz/valorant")
+            .build();
 
     @RabbitListener(queues = RabbitMQConfig.RANK_SYNC_QUEUE)
-    @Transactional
     public void processRankSync(RankSyncMessage message) {
         User user = userRepository.findById(message.userId()).orElse(null);
         if (user == null) return;
 
-        try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.set("Authorization", henrikApiKey);
-            HttpEntity<String> entity = new HttpEntity<>(headers);
+        webClient.get()
+                .uri("/v1/account/{riotId}/{tagLine}", message.riotId(), message.tagLine())
+                .header("Authorization", henrikApiKey)
+                .retrieve()
+                .bodyToMono(String.class)
+                .flatMap(accountStr -> {
+                    try {
+                        JsonNode accountNode = objectMapper.readTree(accountStr);
+                        JsonNode dataNode = accountNode.get("data");
+                        String region = dataNode.get("region").asText();
+                        user.setRiotPuuid(dataNode.get("puuid").asText());
 
-            String accountUrl = henrikApiUrl + "/v1/account/" + message.riotId() + "/" + message.tagLine();
-            ResponseEntity<String> accRes = restTemplate.exchange(accountUrl, HttpMethod.GET, entity, String.class);
+                        return webClient.get()
+                                .uri("/v1/mmr/{region}/{riotId}/{tagLine}", region, message.riotId(), message.tagLine())
+                                .header("Authorization", henrikApiKey)
+                                .retrieve()
+                                .bodyToMono(String.class);
+                    } catch (Exception e) {
+                        return Mono.error(e);
+                    }
+                })
+                .subscribe(
+                        mmrStr -> {
+                            try {
+                                JsonNode mmrNode = objectMapper.readTree(mmrStr);
+                                JsonNode mmrData = mmrNode.get("data");
+                                user.setCurrentRank(mmrData.has("currenttierpatched") && !mmrData.get("currenttierpatched").isNull()
+                                        ? mmrData.get("currenttierpatched").asText() : "Unranked");
+                                user.setMmrElo(mmrData.has("elo") && !mmrData.get("elo").isNull()
+                                        ? mmrData.get("elo").asInt() : 0);
 
-            if (accRes.getStatusCode().is2xxSuccessful() && accRes.getBody() != null) {
-                JsonNode dataNode = objectMapper.readTree(accRes.getBody()).get("data");
-                user.setRiotPuuid(dataNode.get("puuid").asText());
-                String region = dataNode.get("region").asText();
+                                saveUserAndNotify(user);
+                            } catch (Exception e) {
+                                log.error("MMR JSON 파싱 실패: {}", e.getMessage());
+                                user.setCurrentRank("Unranked");
+                                user.setMmrElo(0);
+                                saveUserAndNotify(user);
+                            }
+                        },
+                        error -> {
+                            log.error("Riot API Sync Failed for user {}: {}", user.getId(), error.getMessage());
+                            user.setCurrentRank("Unranked");
+                            user.setMmrElo(0);
+                            saveUserAndNotify(user);
+                        }
+                );
+    }
 
-                String mmrUrl = henrikApiUrl + "/v1/mmr/" + region + "/" + message.riotId() + "/" + message.tagLine();
-                try {
-                    ResponseEntity<String> mmrRes = restTemplate.exchange(mmrUrl, HttpMethod.GET, entity, String.class);
-                    JsonNode mmrData = objectMapper.readTree(mmrRes.getBody()).get("data");
-
-                    user.setCurrentRank(mmrData.has("currenttierpatched") && !mmrData.get("currenttierpatched").isNull()
-                            ? mmrData.get("currenttierpatched").asText() : "Unranked");
-                    user.setMmrElo(mmrData.has("elo") && !mmrData.get("elo").isNull()
-                            ? mmrData.get("elo").asInt() : 0);
-
-                } catch (Exception e) {
-                    user.setCurrentRank("Unranked");
-                    user.setMmrElo(0);
-                }
-            }
-        } catch (Exception e) {
-            user.setCurrentRank("Unranked");
-            user.setMmrElo(0);
-        }
-
+    private void saveUserAndNotify(User user) {
         userRepository.save(user);
-
-
         messagingTemplate.convertAndSend("/topic/user-" + user.getId() + "-profile", "SYNC_COMPLETE");
     }
 }

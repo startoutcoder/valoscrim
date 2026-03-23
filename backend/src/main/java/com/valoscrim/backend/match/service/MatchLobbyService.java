@@ -279,19 +279,15 @@ public class MatchLobbyService {
 
     @Transactional
     public void removeDisconnectedUserFromOpenLobbies(String username) {
-        List<ScrimMatch> openMatches = matchRepository.findByStatusOrderByScheduledTimeAsc(MatchStatus.OPEN);
+        List<ScrimMatch> participatingMatches = matchRepository.findActiveMatchesByUsernameAndType(
+                MatchStatus.OPEN,
+                username,
+                ParticipantType.SOLO
+        );
 
-        for (ScrimMatch match : openMatches) {
-            boolean isGhostParticipant = match.getPlayers().stream()
-                    .anyMatch(p -> p.getParticipantType() == ParticipantType.SOLO &&
-                            p.getUser().getUsername().equals(username));
-
-            if (isGhostParticipant) {
-                log.info("Removing ghost user {} from match lobby {}", username, match.getId());
-                leaveMatch(match.getId(), username);
-
-                break;
-            }
+        for (ScrimMatch match : participatingMatches) {
+            log.info("Removing ghost user {} from match lobby {} (Optimized Search)", username, match.getId());
+            leaveMatch(match.getId(), username);
         }
     }
 }

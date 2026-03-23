@@ -1,6 +1,7 @@
 package com.valoscrim.backend.match;
 
 import com.valoscrim.backend.common.enums.MatchStatus;
+import com.valoscrim.backend.common.enums.ParticipantType;
 import com.valoscrim.backend.common.enums.ServerRegion;
 import jakarta.persistence.LockModeType;
 import jakarta.persistence.QueryHint;
@@ -14,6 +15,7 @@ import java.util.List;
 import java.util.Optional;
 
 public interface MatchRepository extends JpaRepository<ScrimMatch, Long> {
+    @Query("SELECT DISTINCT m FROM ScrimMatch m LEFT JOIN FETCH m.players p LEFT JOIN FETCH p.user WHERE m.status = :status ORDER BY m.scheduledTime ASC")
     List<ScrimMatch> findByStatusOrderByScheduledTimeAsc(MatchStatus status);
 
     List<ScrimMatch> findByTeamHomeIdOrTeamAwayId(Long teamId1, Long teamId2);
@@ -53,7 +55,7 @@ public interface MatchRepository extends JpaRepository<ScrimMatch, Long> {
     Optional<ScrimMatch> findByIdWithPlayers(@Param("id") Long id);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @QueryHints({@QueryHint(name = "javax.persistence.lock.timeout", value = "3000")})
+    @QueryHints({@QueryHint(name = "javax.persistence.lock.timeout", value = "0")})
     @Query("SELECT m FROM ScrimMatch m WHERE m.id = :id")
     Optional<ScrimMatch> findByIdForUpdate(@Param("id") Long id);
 
@@ -113,5 +115,19 @@ public interface MatchRepository extends JpaRepository<ScrimMatch, Long> {
             @Param("status") MatchStatus status,
             @Param("username") String username,
             @Param("participantType") com.valoscrim.backend.common.enums.ParticipantType participantType
+    );
+
+    @Query("""
+        SELECT m
+        FROM ScrimMatch m
+        JOIN m.players p
+        WHERE m.status = :status
+          AND p.user.username = :username
+          AND p.participantType = :participantType
+    """)
+    List<ScrimMatch> findActiveMatchesByUsernameAndType(
+            @Param("status") MatchStatus status,
+            @Param("username") String username,
+            @Param("participantType") ParticipantType participantType
     );
 }
