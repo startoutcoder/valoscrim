@@ -33,8 +33,15 @@
 
 ## 트러블슈팅 및 핵심 아키텍처 설계
 
-### 1. [성능 최적화] N+1 쿼리 튜닝과 부분 인덱스(Partial Index)를 통한 선제적 확장성 확보
-* 실시간 매칭 탐색 시 복잡한 JOIN이 병목을 일으킬 것을 우려해 초기에는 평균 MMR을 비정규화했습니다. 하지만 지연 로딩(Lazy Loading)으로 인한 N+1 쿼리 문제를 `JOIN FETCH`로 튜닝하여 **기존 수십 ms가 소요되던 쿼리를 0.655ms로 대폭 개선**했습니다(EXPLAIN ANALYZE 실측 기준). 
+### 1. [성능 최적화] 실측 기반의 의사결정: 비정규화(Denormalization) 철회와 데이터 무결성 확보
+* 잦은 매칭 검색 시 RDBMS의 JOIN과 AVG() 연산이 병목을 일으킬 것이라 판단했습니다. 이를 방지하고자 Match와 Team 엔티티에 average_mmr 필드를 비정규화하여 저장하고, 팀원 변동 시마다 백그라운드 서비스가 락(Lock)을 걸어 재계산하도록 설계했습니다.
+* 비정규화로 인한 Write 복잡도와 정합성 리스크가 Read 성능 이점보다 큰지 검증하기 위해, 더미 데이터(유저 2.5만, 매치 5천 건) 적재 후 Spring StopWatch로 성능을 실측했습니다.
+
+<img width="1007" height="168" alt="test1" src="https://github.com/user-attachments/assets/f42a6925-2ad2-46cb-aade-e426b1df0d62" />
+<img width="1120" height="173" alt="test2" src="https://github.com/user-attachments/assets/921a0e7d-5170-4489-9f4d-b9c6a4ef684b" />
+
+* 결과: 인덱스(status, match_id) 스캔 최적화를 통해 비정규화가 가져오는 성능 이득이 미미함을 데이터로 증명.
+* 결론: 오버엔지니어링이었던 비정규화 로직과 동기화 트랜잭션을 전면 제거하여 데이터 무결성을 100% 확보하고 시스템 복잡도를 낮춤. 검색은 DB 인덱스에 위임하고, 단일 결과 연산은 WAS 메모리에서 처리하도록 역할을 분리해 리소스 효율 극대화.
 * 향후 데이터 증가 시 `status` 컬럼 특유의 낮은 카디널리티(OPEN, COMPLETED 등)로 인해 발생할 수 있는 Full Table Scan을 선제적으로 방어하고자, Flyway를 통해 부분 인덱스(`CREATE INDEX ... WHERE status = 'OPEN'`)를 적용하여 인덱스 트리 크기를 최소화하고 메모리 히트율을 극대화했습니다.
 
 ### 2. [동시성 제어] 고빈도 충돌 환경의 비관적 락(Fail-Fast)과 사용자 경험(UX) 방어
