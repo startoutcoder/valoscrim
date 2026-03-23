@@ -98,8 +98,6 @@ public class MatchManagementService {
                 .serverLocation(request.serverLocation() != null ? request.serverLocation() : ServerRegion.SEOUL)
                 .build();
 
-        match.recalculateAverageMmr();
-
         ScrimMatch savedMatch = matchRepository.save(match);
 
         matchLineupService.initializeLineupForTeam(savedMatch, homeTeam, MatchSide.HOME);
@@ -124,6 +122,11 @@ public class MatchManagementService {
     }
 
     public MatchResponse createSoloLobby(String username, String mapSelectionMode, ServerRegion serverLocation) {
+
+        if (matchRepository.existsActiveLobbyForUser(MatchStatus.OPEN, username, ParticipantType.SOLO)) {
+            throw new IllegalStateException("You are already in an active solo lobby. Please leave it before creating a new one.");
+        }
+
         User user = userService.getByUsername(username);
 
         ScrimMatch match = ScrimMatch.builder()
@@ -178,6 +181,11 @@ public class MatchManagementService {
     }
 
     public void joinSoloLobby(Long matchId, String username) {
+
+        if (matchRepository.existsActiveLobbyForUser(MatchStatus.OPEN, username, ParticipantType.SOLO)) {
+            throw new IllegalStateException("You are already in an active solo lobby. Please leave it before joining another.");
+        }
+
         ScrimMatch match = matchRepository.findByIdForUpdate(matchId)
                 .orElseThrow(() -> new RuntimeException("Match not found"));
 
@@ -286,9 +294,7 @@ public class MatchManagementService {
     }
 
     private void validateTeamCanEnterTeamMatch(Team team) {
-        int rosterSize = team.getMemberCount() != null
-                ? team.getMemberCount()
-                : (team.getMembers() != null ? team.getMembers().size() : 0);
+        int rosterSize = team.getMembers() != null ? team.getMembers().size() : 0;
 
         if (rosterSize < 5) {
             throw new IllegalStateException("A team must have at least 5 members to enter a team match");

@@ -29,7 +29,6 @@ public class Team {
     private int wins;
     private int losses;
 
-
     private Long ownerId;
 
     @OneToMany(mappedBy = "team", cascade = CascadeType.ALL, orphanRemoval = true)
@@ -47,25 +46,14 @@ public class Team {
     @Column(updatable = false)
     private LocalDateTime createdAt;
 
-    @Column(nullable = false)
-    private Integer averageMmr = 0;
-
-    @Column(nullable = false)
-    private Integer averageTierId = 0;
-
     @Embedded
     private TeamPreferences teamPreferences;
-
-    @Column(nullable = false)
-    private Integer memberCount = 0;
 
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();
         this.wins = 0;
         this.losses = 0;
-        this.averageMmr = 0;
-        this.averageTierId = 0;
     }
 
     public boolean isOwner(User user) {
@@ -85,9 +73,8 @@ public class Team {
 
     public boolean isFull(){
         int MAX_MEMBERS = 7;
-        return this.memberCount != null && this.memberCount >= MAX_MEMBERS;
+        return this.members != null && this.members.size() >= MAX_MEMBERS;
     }
-
 
     public void addMember(TeamMember member) {
         if (member == null) return;
@@ -96,16 +83,13 @@ public class Team {
         }
         members.add(member);
         member.setTeam(this);
-        this.memberCount = members.size();
     }
 
     public void removeMember(TeamMember member) {
         if (member == null) return;
         members.remove(member);
         member.setTeam(null);
-        this.memberCount = members.size();
     }
-
 
     public void assignOwner(TeamMember newOwnerMember) {
         if (newOwnerMember == null || newOwnerMember.getUser() == null) {

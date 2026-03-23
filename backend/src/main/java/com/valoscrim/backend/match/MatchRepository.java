@@ -54,25 +54,61 @@ public interface MatchRepository extends JpaRepository<ScrimMatch, Long> {
     @Query("SELECT m FROM ScrimMatch m WHERE m.id = :id")
     Optional<ScrimMatch> findByIdForUpdate(@Param("id") Long id);
 
-    @Query("""
-    SELECT m
-    FROM ScrimMatch m
-    WHERE m.status = :status
-    ORDER BY ABS(m.averageMmr - :targetMmr) ASC
-    """)
-    List<ScrimMatch> findByStatusOrderByClosestAverageMmr(
-            @Param("status") MatchStatus status,
-            @Param("targetMmr") int targetMmr
-    );
 
     List<ScrimMatch> findByStatusOrderByCreatedAtDesc(MatchStatus status);
-
-    List<ScrimMatch> findByStatusOrderByAverageMmrAsc(MatchStatus status);
-
-    List<ScrimMatch> findByStatusOrderByAverageMmrDesc(MatchStatus status);
 
     List<ScrimMatch> findByStatusAndServerLocationOrderByScheduledTimeAsc(
             MatchStatus status,
             ServerRegion serverLocation
+    );
+
+    @Query("""
+    SELECT m
+    FROM ScrimMatch m
+    LEFT JOIN m.players p ON (p.lineupSlotStatus = 'STARTER' OR p.participantType = 'SOLO')
+    LEFT JOIN p.user u
+    WHERE m.status = :status
+    GROUP BY m.id
+    ORDER BY ABS(AVG(u.mmrElo) - :targetMmr) ASC
+    """)
+    List<ScrimMatch> findMatchesByClosestMmr(
+            @Param("status") MatchStatus status,
+            @Param("targetMmr") double targetMmr
+    );
+
+    @Query("""
+    SELECT m
+    FROM ScrimMatch m
+    LEFT JOIN m.players p ON (p.lineupSlotStatus = 'STARTER' OR p.participantType = 'SOLO')
+    LEFT JOIN p.user u
+    WHERE m.status = :status
+    GROUP BY m.id
+    ORDER BY AVG(u.mmrElo) ASC
+    """)
+    List<ScrimMatch> findByStatusOrderByMmrAsc(@Param("status") MatchStatus status);
+
+    @Query("""
+    SELECT m
+    FROM ScrimMatch m
+    LEFT JOIN m.players p ON (p.lineupSlotStatus = 'STARTER' OR p.participantType = 'SOLO')
+    LEFT JOIN p.user u
+    WHERE m.status = :status
+    GROUP BY m.id
+    ORDER BY AVG(u.mmrElo) DESC
+    """)
+    List<ScrimMatch> findByStatusOrderByMmrDesc(@Param("status") MatchStatus status);
+
+    @Query("""
+        SELECT COUNT(m) > 0 
+        FROM ScrimMatch m 
+        JOIN m.players p 
+        WHERE m.status = :status 
+          AND p.user.username = :username 
+          AND p.participantType = :participantType
+    """)
+    boolean existsActiveLobbyForUser(
+            @Param("status") MatchStatus status,
+            @Param("username") String username,
+            @Param("participantType") com.valoscrim.backend.common.enums.ParticipantType participantType
     );
 }

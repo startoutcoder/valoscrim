@@ -12,6 +12,7 @@ import com.valoscrim.backend.match.ScrimMatchPlayer;
 import com.valoscrim.backend.match.dto.MatchLobbyDetailResponse;
 import com.valoscrim.backend.team.Team;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class MatchLobbyService {
@@ -273,5 +275,23 @@ public class MatchLobbyService {
                 .map(member -> member.getRole().name())
                 .findFirst()
                 .orElse(null);
+    }
+
+    @Transactional
+    public void removeDisconnectedUserFromOpenLobbies(String username) {
+        List<ScrimMatch> openMatches = matchRepository.findByStatusOrderByScheduledTimeAsc(MatchStatus.OPEN);
+
+        for (ScrimMatch match : openMatches) {
+            boolean isGhostParticipant = match.getPlayers().stream()
+                    .anyMatch(p -> p.getParticipantType() == ParticipantType.SOLO &&
+                            p.getUser().getUsername().equals(username));
+
+            if (isGhostParticipant) {
+                log.info("Removing ghost user {} from match lobby {}", username, match.getId());
+                leaveMatch(match.getId(), username);
+
+                break;
+            }
+        }
     }
 }

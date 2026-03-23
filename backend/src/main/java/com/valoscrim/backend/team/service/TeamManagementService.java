@@ -29,8 +29,6 @@ public class TeamManagementService {
     private final TeamRepository teamRepository;
     private final UserService userService;
     private final TeamMapper teamMapper;
-    private final TeamStatsService teamStatsService;
-
 
     public TeamResponse createTeam(TeamCreateRequest request, String username) {
         if (teamRepository.existsByName(request.name())) {
@@ -45,9 +43,6 @@ public class TeamManagementService {
                 .wins(0)
                 .losses(0)
                 .ownerId(owner.getId())
-                .averageMmr(0)
-                .averageTierId(0)
-                .memberCount(0)
                 .build();
 
         TeamPreferences prefs = new TeamPreferences();
@@ -66,8 +61,6 @@ public class TeamManagementService {
                 .build();
 
         savedTeam.addMember(ownerMember);
-        savedTeam.assignOwner(ownerMember);
-        teamStatsService.recalculateTeamStats(savedTeam);
 
         Team persistedTeam = teamRepository.findByIdWithMembersAndUsers(savedTeam.getId())
                 .orElseThrow(() -> new RuntimeException("Team not found after creation"));
@@ -124,7 +117,7 @@ public class TeamManagementService {
                         membership.getTeam().getName(),
                         membership.getTeam().getTag(),
                         membership.getRole().name(),
-                        membership.getTeam().getMemberCount()
+                        membership.getTeam().getMembers() != null ? membership.getTeam().getMembers().size() : 0
                 ))
                 .toList();
     }
@@ -141,5 +134,4 @@ public class TeamManagementService {
         return teamRepository.findPublicRecruitingTeams(pageable)
                 .map(teamMapper::toPublicTeamResponse);
     }
-
 }

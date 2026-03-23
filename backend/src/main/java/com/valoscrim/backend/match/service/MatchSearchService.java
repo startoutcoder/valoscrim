@@ -39,8 +39,8 @@ public class MatchSearchService {
         List<ScrimMatch> matches = switch (strategy) {
             case "CLOSEST_RANK" -> findClosestRankMatches(username, status);
             case "TIME_CREATED" -> matchRepository.findByStatusOrderByCreatedAtDesc(status);
-            case "RANK_ASC" -> matchRepository.findByStatusOrderByAverageMmrAsc(status);
-            case "RANK_DESC" -> matchRepository.findByStatusOrderByAverageMmrDesc(status);
+            case "RANK_ASC" -> matchRepository.findByStatusOrderByMmrAsc(status);
+            case "RANK_DESC" -> matchRepository.findByStatusOrderByMmrDesc(status);
             default -> matchRepository.findByStatusOrderByScheduledTimeAsc(status);
         };
 
@@ -57,7 +57,13 @@ public class MatchSearchService {
         if (filter.averageRank() != null && !filter.averageRank().isBlank()) {
             String normalizedRank = filter.averageRank().trim().toUpperCase();
             stream = stream.filter(match -> {
-                String rank = RankUtil.rankFromMmr(match.getAverageMmr());
+                double avg = match.getPlayers().stream()
+                        .filter(p -> p.getUser() != null && p.getUser().getMmrElo() != null)
+                        .mapToInt(p -> p.getUser().getMmrElo())
+                        .average()
+                        .orElse(0.0);
+
+                String rank = RankUtil.rankFromMmr((int) Math.round(avg));
                 return rank != null && rank.toUpperCase().equals(normalizedRank);
             });
         }
@@ -80,13 +86,22 @@ public class MatchSearchService {
                 .findFirst()
                 .orElse(null);
 
-        if (myTeam == null || myTeam.getAverageMmr() == null || myTeam.getAverageMmr() == 0) {
+        if (myTeam == null) {
             return matchRepository.findByStatusOrderByScheduledTimeAsc(status);
         }
 
-        return matchRepository.findByStatusOrderByClosestAverageMmr(
-                status,
-                myTeam.getAverageMmr()
-        );
+        // Calculate my team's average MMR on the fly
+        double myTeamMmr = myTeam.getMembers().stream()
+                .filter(m -> m.getUser() != null && m.getUser().getMmrElo() != null)
+                .mapToInt(m -> m.getUser().getMmrElo())
+                .average()
+                .orElse(0.0);
+
+        if (myTeamMmr == 0.0) {
+            return matchRepository.findByStatusOrderByScheduledTimeAsc(status);
+        }
+
+        // Call the Closest MMR query
+        return matchRepository.findMatchesByClosestMmr(status, myTeamMmr);
     }
 }

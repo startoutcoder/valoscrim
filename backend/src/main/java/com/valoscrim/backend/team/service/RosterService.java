@@ -21,7 +21,6 @@ public class RosterService {
     private final TeamRepository teamRepository;
     private final TeamMemberRepository teamMemberRepository;
     private final UserService userService;
-    private final TeamStatsService teamStatsService;
 
     public void addMember(Long teamId, String usernameToAdd, String requesterUsername) {
         Team team = getTeamOrThrow(teamId);
@@ -58,7 +57,6 @@ public class RosterService {
                 .orElseThrow(() -> new IllegalArgumentException("Target user is not a member of this team"));
 
         team.removeMember(member);
-        teamStatsService.recalculateTeamStats(team);
     }
 
     public void leaveTeam(Long teamId, String username) {
@@ -77,7 +75,6 @@ public class RosterService {
                 .orElseThrow(() -> new SecurityException("Team member not found"));
 
         team.removeMember(member);
-        teamStatsService.recalculateTeamStats(team);
     }
 
     public void updateMemberRole(Long teamId, UpdateMemberRequest request, String ownerUsername, Long targetUserId) {
@@ -118,7 +115,6 @@ public class RosterService {
                 .build();
 
         team.addMember(member);
-        teamStatsService.recalculateTeamStats(team);
     }
 
     private Team getTeamOrThrow(Long id) {

@@ -18,8 +18,7 @@ import java.util.Set;
 
 @Entity
 @Table(name = "scrim_matches", indexes = {
-        @Index(name = "idx_match_status_time", columnList = "status, scheduledTime"),
-        @Index(name = "idx_match_status_avg_mmr", columnList = "status, averageMmr")
+        @Index(name = "idx_match_status_time", columnList = "status, scheduledTime")
 })
 @Getter
 @Setter
@@ -87,52 +86,17 @@ public class ScrimMatch {
     @Builder.Default
     private Integer awayScore = 0;
 
-    @Column(name = "average_mmr", nullable = false)
-    @Builder.Default
-    private Integer averageMmr = 0;
 
     public void addPlayer(ScrimMatchPlayer player) {
         if (player == null) return;
         players.add(player);
         player.setMatch(this);
-        recalculateAverageMmr();
     }
 
     public void removePlayer(ScrimMatchPlayer player) {
         if (player == null) return;
         players.remove(player);
         player.setMatch(null);
-        recalculateAverageMmr();
-    }
-
-    public void recalculateAverageMmr() {
-        if (this.matchType == MatchType.TEAM) {
-            double avg = this.players.stream()
-                    .filter(p -> p.getParticipantType() == ParticipantType.TEAM_ROSTER)
-                    .filter(p -> p.getMatchSide() == MatchSide.HOME)
-                    .filter(p -> p.getLineupSlotStatus() == LineupSlotStatus.STARTER)
-                    .filter(p -> p.getUser() != null && p.getUser().getMmrElo() != null)
-                    .mapToInt(p -> p.getUser().getMmrElo())
-                    .average()
-                    .orElse(0.0);
-
-            this.averageMmr = (int) Math.round(avg);
-            return;
-        }
-
-        if (this.matchType == MatchType.SOLO) {
-            double avg = this.players.stream()
-                    .filter(p -> p.getParticipantType() == ParticipantType.SOLO)
-                    .filter(p -> p.getUser() != null && p.getUser().getMmrElo() != null)
-                    .mapToInt(p -> p.getUser().getMmrElo())
-                    .average()
-                    .orElse(0.0);
-
-            this.averageMmr = (int) Math.round(avg);
-            return;
-        }
-
-        this.averageMmr = 0;
     }
 
     public boolean isSoloFull() {

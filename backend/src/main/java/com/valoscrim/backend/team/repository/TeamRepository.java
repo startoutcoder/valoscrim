@@ -15,7 +15,7 @@ public interface TeamRepository extends JpaRepository<Team, Long> {
     List<Team> findByNameContainingIgnoreCase(String name);
     List<Team> findByOwnerId(Long ownerId);
 
-    @Query("SELECT t FROM Team t WHERE t.memberCount < 7")
+    @Query("SELECT t FROM Team t WHERE SIZE(t.members) < 7")
     Page<Team> findPublicRecruitingTeams(Pageable pageable);
 
     @Query("""

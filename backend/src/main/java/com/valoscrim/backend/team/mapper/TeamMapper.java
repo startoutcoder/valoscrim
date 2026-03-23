@@ -14,12 +14,24 @@ import java.util.List;
 @Component
 public class TeamMapper {
 
+    private Integer calculateTeamAverageMmr(Team team) {
+        if (team.getMembers() == null || team.getMembers().isEmpty()) return 0;
+        double avg = team.getMembers().stream()
+                .filter(m -> m.getUser() != null && m.getUser().getMmrElo() != null)
+                .mapToInt(m -> m.getUser().getMmrElo())
+                .average()
+                .orElse(0.0);
+        return (int) Math.round(avg);
+    }
+
     public TeamResponse toTeamResponse(Team team) {
         TeamPreferences prefs = team.getTeamPreferences();
 
         Boolean micAvailable = prefs != null ? prefs.isRequireMic() : null;
         Integer minimumAge = prefs != null ? prefs.getMinimumAge() : null;
         Integer competitiveness = prefs != null ? prefs.getCompetitiveness() : null;
+
+        Integer calculatedMmr = calculateTeamAverageMmr(team);
 
         if (team.getMembers() == null) {
             return new TeamResponse(
@@ -30,8 +42,8 @@ public class TeamMapper {
                     team.getLosses(),
                     team.getOwnerId(),
                     team.getCreatedAt().toLocalDate(),
-                    team.getAverageMmr(),
-                    RankUtil.rankFromMmr(team.getAverageMmr()),
+                    calculatedMmr,
+                    RankUtil.rankFromMmr(calculatedMmr),
                     micAvailable,
                     minimumAge,
                     competitiveness,
@@ -61,8 +73,8 @@ public class TeamMapper {
                 team.getLosses(),
                 team.getOwnerId(),
                 team.getCreatedAt().toLocalDate(),
-                team.getAverageMmr(),
-                RankUtil.rankFromMmr(team.getAverageMmr()),
+                calculatedMmr,
+                RankUtil.rankFromMmr(calculatedMmr),
                 micAvailable,
                 minimumAge,
                 competitiveness,
@@ -71,10 +83,8 @@ public class TeamMapper {
     }
 
     public PublicTeamResponse toPublicTeamResponse(Team team) {
-        int memberCount = team.getMemberCount() != null
-                ? team.getMemberCount()
-                : (team.getMembers() != null ? team.getMembers().size() : 0);
-
+        int memberCount = team.getMembers() != null ? team.getMembers().size() : 0;
+        Integer calculatedMmr = calculateTeamAverageMmr(team);
         TeamPreferences prefs = team.getTeamPreferences();
 
         boolean micAvailable = prefs != null && prefs.isRequireMic();
@@ -86,7 +96,7 @@ public class TeamMapper {
                 team.getTag(),
                 memberCount,
                 memberCount < 7,
-                RankUtil.rankFromMmr(team.getAverageMmr()),
+                RankUtil.rankFromMmr(calculatedMmr),
                 micAvailable,
                 minimumAge
         );

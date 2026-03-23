@@ -106,7 +106,6 @@ public class MatchLineupService {
         }
 
         resetTeamReady(match, managedTeam);
-        match.recalculateAverageMmr();
         matchRepository.save(match);
         messagingTemplate.convertAndSend("/topic/match-" + matchId, "REFRESH");
     }
@@ -148,7 +147,6 @@ public class MatchLineupService {
         playerIn.setLineupSlotStatus(LineupSlotStatus.STARTER);
 
         resetTeamReady(match, managedTeam);
-        match.recalculateAverageMmr();
         matchRepository.save(match);
         messagingTemplate.convertAndSend("/topic/match-" + matchId, "REFRESH");
     }

@@ -3,7 +3,6 @@ package com.valoscrim.backend.user.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.valoscrim.backend.config.RabbitMQConfig;
-import com.valoscrim.backend.team.service.TeamStatsService;
 import com.valoscrim.backend.user.User;
 import com.valoscrim.backend.user.UserRepository;
 import com.valoscrim.backend.user.dto.RankSyncMessage;
@@ -27,7 +26,6 @@ public class RankSyncWorker {
 
     private final UserRepository userRepository;
     private final SimpMessagingTemplate messagingTemplate;
-    private final TeamStatsService teamStatsService;
     private final RestTemplate restTemplate = new RestTemplate();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -75,20 +73,9 @@ public class RankSyncWorker {
             user.setMmrElo(0);
         }
 
-        User savedUser = userRepository.save(user);
-        recalculateTeamsForUser(savedUser);
+        userRepository.save(user);
+
 
         messagingTemplate.convertAndSend("/topic/user-" + user.getId() + "-profile", "SYNC_COMPLETE");
-    }
-
-    private void recalculateTeamsForUser(User user) {
-        if (user == null || user.getMemberships() == null) {
-            return;
-        }
-
-        user.getMemberships().stream()
-                .map(membership -> membership.getTeam())
-                .distinct()
-                .forEach(teamStatsService::recalculateTeamStats);
     }
 }

@@ -84,7 +84,16 @@ public class TeamReviewService {
 
                     String opponentName = opponent != null ? opponent.getName() : "Unknown";
                     String opponentTag = opponent != null ? opponent.getTag() : "";
-                    int opponentAvgTier = opponent != null && opponent.getAverageMmr() != null ? opponent.getAverageMmr() : 0;
+
+                    int opponentAvgTier = 0;
+
+                    if (opponent != null && opponent.getMembers() != null) {
+                        opponentAvgTier = (int) opponent.getMembers().stream()
+                                .filter(member -> member.getUser() != null && member.getUser().getMmrElo() != null)
+                                .mapToInt(member -> member.getUser().getMmrElo())
+                                .average()
+                                .orElse(0.0);
+                    }
 
                     int myScore = 0; // Replace with: isHomeTeam ? m.getHomeScore() : m.getAwayScore();
                     int oppScore = 0; // Replace with: isHomeTeam ? m.getAwayScore() : m.getHomeScore();
@@ -105,7 +114,6 @@ public class TeamReviewService {
                 })
                 .collect(Collectors.toList());
     }
-
 
     private Team getTeamOrThrow(Long id) {
         return teamRepository.findById(id)

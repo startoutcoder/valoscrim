@@ -259,7 +259,8 @@ public class MatchController {
     }
 
     @MessageExceptionHandler(ObjectOptimisticLockingFailureException.class)
-    public void handleException(ObjectOptimisticLockingFailureException ex) {
+    public String handleException(ObjectOptimisticLockingFailureException ex) {
         log.warn("Blocked a concurrent veto request (Double click or network lag detected).");
+        return "Another player has already made a veto request. Your screen will synchronize accordingly.";
     }
 }
