@@ -55,7 +55,7 @@
 ### 4. [비동기 아키텍처] WebClient와 Manual-Ack를 통한 데이터 무손실 논블로킹 워커 구축
 * 메인 WAS 스레드 보호를 위해 외부 메시지 브로커(RabbitMQ)를 도입했으나, 워커 스레드 내부에서 동기식 `RestTemplate` 사용 시 외부 Riot API 응답 대기 시간 동안 리스너 스레드 풀마저 블로킹되는 2차 병목을 발견했습니다.
 * 이를 해결하고자 Spring WebFlux의 **`WebClient`를 도입해 HTTP I/O 요청을 Netty 이벤트 루프에 위임하고 스레드를 즉시 해방**하도록 구조를 개편했습니다.
-* 특히, 비동기 호출로 인한 **파이어 앤 포겟(Fire-and-Forget) 메시지 유실(Data Loss)** 현상을 방지하기 위해 RabbitMQ의 기본 Auto-Ack를 비활성화하고, 비동기 체인이 끝나는 시점에 **수동 승인(Manual-Ack) 및 Nack(Requeue)** 처리를 구현하여 완벽하고 안전한 논블로킹 파이프라인을 완성했습니다.
+* 특히, 비동기 호출로 인한 **파이어 앤 포겟(Fire-and-Forget) 메시지 유실(Data Loss)** 현상을 방지하기 위해 RabbitMQ의 기본 Auto-Ack를 비활성화하고, 비동기 체인이 끝나는 시점에 **수동 승인(Manual-Ack) 및 Nack(Requeue)** 처리를 구현하여 안전한 논블로킹 파이프라인을 완성했습니다.
 
 ### 5. [보안 최적화] O(1) 인메모리 JWT 블랙리스트와 분산 환경(Scale-out) 확장성 설계
 * 초당 수많은 프레임이 오가는 STOMP 환경에서 인터셉터가 매번 JWT 서명을 검증하는 극심한 CPU 오버헤드를 줄이고자, WebSocket 핸드쉐이크 시점에만 만료 시간을 파싱해 `TaskScheduler`로 세션 종료를 예약하는 논블로킹 블랙리스트를 구현했습니다. 
