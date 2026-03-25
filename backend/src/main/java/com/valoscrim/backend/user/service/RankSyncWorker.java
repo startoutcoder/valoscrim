@@ -19,6 +19,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
 import java.io.IOException;
+import java.time.Duration;
 
 @Slf4j
 @Service
@@ -58,6 +59,7 @@ public class RankSyncWorker {
                 .header("Authorization", henrikApiKey)
                 .retrieve()
                 .bodyToMono(String.class)
+                .timeout(Duration.ofSeconds(3))
                 .flatMap(accountStr -> {
                     try {
                         JsonNode accountNode = objectMapper.readTree(accountStr);
@@ -69,7 +71,8 @@ public class RankSyncWorker {
                                 .uri("/v1/mmr/{region}/{riotId}/{tagLine}", region, message.riotId(), message.tagLine())
                                 .header("Authorization", henrikApiKey)
                                 .retrieve()
-                                .bodyToMono(String.class);
+                                .bodyToMono(String.class)
+                                .timeout(Duration.ofSeconds(3));
                     } catch (Exception e) {
                         return Mono.error(e);
                     }
@@ -85,7 +88,6 @@ public class RankSyncWorker {
                                         ? mmrData.get("elo").asInt() : 0);
 
                                 saveUserAndNotify(user);
-
                                 channel.basicAck(tag, false);
                             } catch (Exception e) {
                                 log.error("MMR JSON 파싱 실패: {}", e.getMessage());
@@ -93,7 +95,7 @@ public class RankSyncWorker {
                             }
                         },
                         error -> {
-                            log.error("Riot API Sync Failed for user {}: {}", user.getId(), error.getMessage());
+                            log.error("Riot API Sync Failed (or Timeout) for user {}: {}", user.getId(), error.getMessage());
                             fallbackAndNack(user, channel, tag, false);
                         }
                 );

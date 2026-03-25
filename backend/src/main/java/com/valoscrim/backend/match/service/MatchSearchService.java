@@ -90,7 +90,6 @@ public class MatchSearchService {
             return matchRepository.findByStatusOrderByScheduledTimeAsc(status);
         }
 
-        // Calculate my team's average MMR on the fly
         double myTeamMmr = myTeam.getMembers().stream()
                 .filter(m -> m.getUser() != null && m.getUser().getMmrElo() != null)
                 .mapToInt(m -> m.getUser().getMmrElo())
@@ -101,7 +100,6 @@ public class MatchSearchService {
             return matchRepository.findByStatusOrderByScheduledTimeAsc(status);
         }
 
-        // Call the Closest MMR query
         return matchRepository.findMatchesByClosestMmr(status, myTeamMmr);
     }
 }

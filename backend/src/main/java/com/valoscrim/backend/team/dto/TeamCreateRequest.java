@@ -14,7 +14,6 @@ public record TeamCreateRequest(
         @Size(min = 2, max = 5, message = "Tag must be between 2-5 characters")
         String tag,
 
-        // New Fields
         boolean micAvailable,
 
         @Min(value = 13, message = "Minimum age must be at least 13")

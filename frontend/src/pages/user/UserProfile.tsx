@@ -88,7 +88,7 @@ export default function UserProfile() {
         const file = e.target.files?.[0];
         if (!file) return;
 
-        if (file.size > 5 * 1024 * 1024) { // 5MB limit
+        if (file.size > 5 * 1024 * 1024) {
             setMessage({ type: 'error', text: 'Image must be less than 5MB.' });
             return;
         }

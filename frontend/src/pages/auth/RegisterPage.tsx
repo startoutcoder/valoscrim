@@ -9,7 +9,7 @@ export default function RegisterPage() {
         username: '',
         email: '',
         password: '',
-        confirmPassword: '' // <--- 1. New Field
+        confirmPassword: ''
     });
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
@@ -21,10 +21,9 @@ export default function RegisterPage() {
         e.preventDefault();
         setError('');
 
-        // <--- 2. Client-Side Validation (Zero Backend Strain)
         if (formData.password !== formData.confirmPassword) {
             setError("Passwords do not match!");
-            return; // Stop here, don't even call the backend
+            return;
         }
 
         if (formData.password.length < 8) {
@@ -35,7 +34,6 @@ export default function RegisterPage() {
         setLoading(true);
 
         try {
-            // We only send the fields the backend expects (exclude confirmPassword)
             const requestData = {
                 username: formData.username,
                 email: formData.email,
@@ -69,7 +67,6 @@ export default function RegisterPage() {
                 )}
 
                 <form onSubmit={handleSubmit} className="space-y-6">
-                    {/* Username */}
                     <div>
                         <label className="block text-sm font-medium text-gray-400 mb-2">Username</label>
                         <div className="relative">
@@ -85,7 +82,6 @@ export default function RegisterPage() {
                         </div>
                     </div>
 
-                    {/* Email */}
                     <div>
                         <label className="block text-sm font-medium text-gray-400 mb-2">Email</label>
                         <div className="relative">
@@ -101,7 +97,6 @@ export default function RegisterPage() {
                         </div>
                     </div>
 
-                    {/* Password */}
                     <div>
                         <label className="block text-sm font-medium text-gray-400 mb-2">Password</label>
                         <div className="relative">
@@ -117,7 +112,6 @@ export default function RegisterPage() {
                         </div>
                     </div>
 
-                    {/* <--- 3. Confirm Password Field */}
                     <div>
                         <label className="block text-sm font-medium text-gray-400 mb-2">Confirm Password</label>
                         <div className="relative">
@@ -128,7 +122,7 @@ export default function RegisterPage() {
                                 onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})}
                                 className={`w-full bg-[#0f1923] border rounded-lg py-3 pl-10 pr-4 text-white focus:outline-none focus:ring-1 transition-colors ${
                                     formData.confirmPassword && formData.password !== formData.confirmPassword
-                                        ? 'border-red-500 focus:border-red-500 focus:ring-red-500' // Visual Red Border if mismatch
+                                        ? 'border-red-500 focus:border-red-500 focus:ring-red-500' 
                                         : 'border-gray-700 focus:border-[#ff4655] focus:ring-[#ff4655]'
                                 }`}
                                 placeholder="••••••••"

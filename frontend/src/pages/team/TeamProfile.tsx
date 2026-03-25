@@ -166,7 +166,6 @@ export default function TeamProfile() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {team.members.map((member) => {
-                        // --- 1. Compute the rank info here ---
                         const rankInfo = getRankInfoFromString(member.currentRank);
 
                         return (
@@ -177,13 +176,11 @@ export default function TeamProfile() {
                                     </div>
 
                                     <div>
-                                        {/* --- 2. Make this a flex container to align name and badge --- */}
                                         <div className="flex items-center gap-2">
                                             <div className="text-white font-bold">
                                                 {member.displayName || member.riotGameName || member.username}
                                             </div>
 
-                                            {/* --- 3. Render the badge if it exists --- */}
                                             {member.currentRank && member.currentRank !== "Unranked" && rankInfo && (
                                                 <span className={`text-[9px] pl-1 pr-1.5 py-0.5 rounded border font-black uppercase tracking-wider flex items-center gap-1 ${rankInfo.bg} ${rankInfo.color} ${rankInfo.border}`}>
                                                     <img src={rankInfo.icon} alt={member.currentRank} className="w-3.5 h-3.5 object-contain" />

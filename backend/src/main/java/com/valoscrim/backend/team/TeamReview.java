@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "team_reviews", uniqueConstraints = {
-        @UniqueConstraint(columnNames = {"team_id", "reviewer_id"}) // One review per user per team
+        @UniqueConstraint(columnNames = {"team_id", "reviewer_id"})
 })
 @Data
 @NoArgsConstructor

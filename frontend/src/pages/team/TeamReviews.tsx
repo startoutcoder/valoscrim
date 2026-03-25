@@ -36,7 +36,7 @@ export const TeamReviews = ({ teamId, ownerId }: { teamId: string, ownerId: numb
             await api.post(`/teams/${teamId}/reviews`, { isRecommended: recommend, comment });
             setShowForm(false);
             setComment('');
-            fetchReviews(); // Refresh list
+            fetchReviews();
         } catch (error: any) {
             alert(error.response?.data?.message || "Failed to post review.");
         }
