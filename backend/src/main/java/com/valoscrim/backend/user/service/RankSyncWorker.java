@@ -77,6 +77,7 @@ public class RankSyncWorker {
                         return Mono.error(e);
                     }
                 })
+                .publishOn(reactor.core.scheduler.Schedulers.boundedElastic())
                 .subscribe(
                         mmrStr -> {
                             try {

@@ -1,16 +1,12 @@
 package com.valoscrim.backend.auth;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.valoscrim.backend.config.JwtService;
 import com.valoscrim.backend.user.User;
 import com.valoscrim.backend.user.UserRepository;
 import com.valoscrim.backend.user.dto.UserRegistrationRequest;
 import com.valoscrim.backend.auth.dto.AuthenticationRequest;
 import com.valoscrim.backend.auth.dto.AuthenticationResponse;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
