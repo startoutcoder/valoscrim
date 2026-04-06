@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, X, User, Users, Calendar, Loader2, Map as MapIcon } from 'lucide-react';
+import { Plus, X, User, Users, Calendar, Loader2, Map as MapIcon, MapPinned } from 'lucide-react';
 import { useAuth } from "../context/AuthContext";
 import { api } from '../api/axios';
 import { useNavigate } from 'react-router-dom';
@@ -12,6 +12,7 @@ export default function CreateMatchFAB() {
     const [isOpen, setIsOpen] = useState(false);
     const [mode, setMode] = useState<'SOLO' | 'TEAM'>('SOLO');
     const [mapSelectionMode, setMapSelectionMode] = useState<'VETO' | 'SELECT'>('VETO');
+    const [serverLocation, setServerLocation] = useState('SEOUL'); // 기본 서버를 서울로 설정
     const [loading, setLoading] = useState(false);
 
     const [selectedTeamId, setSelectedTeamId] = useState<number | string>('');
@@ -22,11 +23,24 @@ export default function CreateMatchFAB() {
         label: `${team.name} [${team.tag}]`
     })) : [];
 
+    const regionOptions: SelectOption[] = [
+        { value: 'SEOUL', label: 'Korea / Seoul' },
+        { value: 'TOKYO', label: 'Japan / Tokyo' },
+        { value: 'SINGAPORE', label: 'Singapore' },
+        { value: 'MUMBAI', label: 'India / Mumbai' },
+        { value: 'SYDNEY', label: 'Australia / Sydney' },
+        { value: 'FRANKFURT', label: 'Germany / Frankfurt' },
+        { value: 'LONDON', label: 'UK / London' },
+        { value: 'N_CALIFORNIA', label: 'NA / N. California' },
+        { value: 'TEXAS', label: 'NA / Texas' },
+        { value: 'OREGON', label: 'NA / Oregon' }
+    ];
+
     const handleCreate = async () => {
         setLoading(true);
         try {
             if (mode === 'SOLO') {
-                await api.post(`/matches/solo?mapSelectionMode=${mapSelectionMode}`);
+                await api.post(`/matches/solo?mapSelectionMode=${mapSelectionMode}&serverLocation=${serverLocation}`);
                 window.dispatchEvent(new Event('match-created'));
 
                 setIsOpen(false);
@@ -43,7 +57,8 @@ export default function CreateMatchFAB() {
                 await api.post('/matches', {
                     teamId: Number(selectedTeamId),
                     startTime: finalTime,
-                    mapSelectionMode: mapSelectionMode
+                    mapSelectionMode: mapSelectionMode,
+                    serverLocation: serverLocation
                 });
 
                 window.dispatchEvent(new Event('match-created'));
@@ -107,6 +122,17 @@ export default function CreateMatchFAB() {
                                 >
                                     <Users size={18} /> Team Scrim
                                 </button>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs uppercase text-gray-400 font-bold mb-2">Server Region</label>
+                                <Select
+                                    options={regionOptions}
+                                    value={serverLocation}
+                                    onChange={setServerLocation}
+                                    placeholder="Select Region"
+                                    icon={<MapPinned size={16} />}
+                                />
                             </div>
 
                             <div>

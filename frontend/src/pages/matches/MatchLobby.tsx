@@ -15,6 +15,8 @@ import {
     Users,
     Repeat,
     Save,
+    Edit3,
+    X
 } from 'lucide-react';
 import { Toast, type ToastType } from '../../UI/Toast';
 import { Client } from '@stomp/stompjs';
@@ -91,6 +93,7 @@ export default function MatchLobby() {
 
     const [partyCodeInput, setPartyCodeInput] = useState('');
     const [copied, setCopied] = useState(false);
+    const [isEditingPartyCode, setIsEditingPartyCode] = useState(false);
 
     const [selectedStarterIds, setSelectedStarterIds] = useState<number[]>([]);
     const [savingLineup, setSavingLineup] = useState(false);
@@ -247,11 +250,23 @@ export default function MatchLobby() {
         }
     };
 
+    const handleEditPartyCodeClick = () => {
+        setPartyCodeInput(match?.partyCode || '');
+        setIsEditingPartyCode(true);
+    };
+
+    const handleCancelEditPartyCode = () => {
+        setIsEditingPartyCode(false);
+        setPartyCodeInput('');
+    };
+
     const handleSavePartyCode = async () => {
         try {
             await api.patch(`/matches/${matchId}/party-code?code=${encodeURIComponent(partyCodeInput)}`);
             setToast({ msg: 'In-Game code broadcasted to lobby!', type: 'success' });
             setPartyCodeInput('');
+            setIsEditingPartyCode(false);
+            await fetchLobby();
         } catch (err: any) {
             setToast({
                 msg: err.response?.data?.message || 'Failed to update party code.',
@@ -606,20 +621,32 @@ export default function MatchLobby() {
                             </div>
                         </div>
 
-                        {match.partyCode ? (
-                            <button
-                                onClick={handleCopyPartyCode}
-                                className="flex items-center gap-3 bg-[#0f1923] hover:bg-gray-800 border border-blue-500/30 px-6 py-3 rounded-lg transition-all group w-full md:w-auto justify-center"
-                            >
-                                <span className="font-mono text-xl font-bold text-white tracking-widest">
-                                    {match.partyCode}
-                                </span>
-                                {copied ? (
-                                    <CheckCircle size={20} className="text-green-400" />
-                                ) : (
-                                    <Copy size={20} className="text-gray-400 group-hover:text-white" />
+                        {match.partyCode && !isEditingPartyCode ? (
+                            <div className="flex gap-2 w-full md:w-auto">
+                                <button
+                                    onClick={handleCopyPartyCode}
+                                    className="flex items-center gap-3 bg-[#0f1923] hover:bg-gray-800 border border-blue-500/30 px-6 py-3 rounded-lg transition-all group flex-1 md:flex-none justify-center"
+                                >
+                                    <span className="font-mono text-xl font-bold text-white tracking-widest">
+                                        {match.partyCode}
+                                    </span>
+                                    {copied ? (
+                                        <CheckCircle size={20} className="text-green-400" />
+                                    ) : (
+                                        <Copy size={20} className="text-gray-400 group-hover:text-white" />
+                                    )}
+                                </button>
+
+                                {canModifyMatchDetails && (
+                                    <button
+                                        onClick={handleEditPartyCodeClick}
+                                        className="flex items-center justify-center bg-[#0f1923] hover:bg-gray-800 border border-blue-500/30 px-4 py-3 rounded-lg transition-all text-gray-400 hover:text-white"
+                                        title="Edit Party Code"
+                                    >
+                                        <Edit3 size={20} />
+                                    </button>
                                 )}
-                            </button>
+                            </div>
                         ) : (
                             canModifyMatchDetails && (
                                 <div className="flex w-full md:w-auto">
@@ -633,10 +660,19 @@ export default function MatchLobby() {
                                     <button
                                         onClick={handleSavePartyCode}
                                         disabled={!partyCodeInput}
-                                        className="bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 text-white font-bold px-6 py-3 rounded-r-lg transition-colors"
+                                        className={`bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 text-white font-bold px-6 py-3 transition-colors ${isEditingPartyCode ? '' : 'rounded-r-lg'}`}
                                     >
-                                        Set
+                                        Save
                                     </button>
+                                    {isEditingPartyCode && (
+                                        <button
+                                            onClick={handleCancelEditPartyCode}
+                                            className="bg-red-500/20 hover:bg-red-500 hover:text-white text-red-500 border-y border-r border-red-500/30 font-bold px-4 py-3 rounded-r-lg transition-colors"
+                                            title="Cancel Edit"
+                                        >
+                                            <X size={20} />
+                                        </button>
+                                    )}
                                 </div>
                             )
                         )}

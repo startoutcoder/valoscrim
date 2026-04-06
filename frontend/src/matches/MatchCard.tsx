@@ -1,5 +1,5 @@
 import React from 'react';
-import { Swords, User, Clock} from 'lucide-react';
+import { Swords, User, Clock, MapPinned } from 'lucide-react';
 import { getRankFromElo } from '../utils/rankUtils';
 
 export interface MatchData {
@@ -26,6 +26,23 @@ interface MatchCardProps {
     onJoin: (match: MatchData) => void;
     onView: (matchId: number) => void;
 }
+
+const formatRegion = (region?: string) => {
+    if (!region) return 'Unknown Region';
+    const regions: Record<string, string> = {
+        'SEOUL': 'Seoul',
+        'TOKYO': 'Tokyo',
+        'SINGAPORE': 'Singapore',
+        'MUMBAI': 'Mumbai',
+        'SYDNEY': 'Sydney',
+        'FRANKFURT': 'Frankfurt',
+        'LONDON': 'London',
+        'N_CALIFORNIA': 'N. California',
+        'TEXAS': 'Texas',
+        'OREGON': 'Oregon'
+    };
+    return regions[region] || region;
+};
 
 export const MatchCard: React.FC<MatchCardProps> = ({ match, onJoin, onView }) => {
 
@@ -55,9 +72,17 @@ export const MatchCard: React.FC<MatchCardProps> = ({ match, onJoin, onView }) =
                         </div>
                         <div>
                             <h3 className="text-white font-bold text-lg leading-tight">Solo Queue</h3>
-                            <p className="text-gray-400 text-xs flex items-center gap-1">
-                                <Clock size={12} /> {new Date(match.scheduledTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                            </p>
+                            <div className="text-gray-400 text-xs flex items-center gap-2 mt-1">
+                                <span className="flex items-center gap-1">
+                                    <Clock size={12} />
+                                    {new Date(match.scheduledTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                </span>
+                                <span className="text-gray-600">•</span>
+                                <span className="flex items-center gap-1 text-blue-300/80">
+                                    <MapPinned size={12} />
+                                    {formatRegion(match.serverLocation)}
+                                </span>
+                            </div>
                         </div>
                     </div>
 
@@ -125,11 +150,24 @@ export const MatchCard: React.FC<MatchCardProps> = ({ match, onJoin, onView }) =
                     </div>
                 </div>
 
-                <div className="flex flex-col items-center justify-center shrink-0">
-                    <div className="bg-[#0f1923] p-2 rounded-full border border-gray-600 group-hover:border-[#ff4655] transition-colors">
+                <div className="flex flex-col items-center justify-center shrink-0 px-2">
+                    <div className="bg-[#0f1923] p-2 rounded-full border border-gray-600 group-hover:border-[#ff4655] transition-colors mb-2">
                         <Swords size={20} className="text-gray-400 group-hover:text-[#ff4655]" />
                     </div>
-                    <span className="text-xs text-gray-500 mt-1 font-mono">BO1</span>
+                    <div className="flex flex-col items-center gap-1.5 text-center">
+                        <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] text-gray-400 font-mono bg-gray-800 px-1.5 py-0.5 rounded border border-gray-700">BO1</span>
+                            {match.serverLocation && (
+                                <span className="flex items-center gap-1 text-[10px] text-[#ff4655] font-bold tracking-wider bg-[#ff4655]/10 px-1.5 py-0.5 rounded border border-[#ff4655]/20">
+                                    <MapPinned size={10} /> {formatRegion(match.serverLocation)}
+                                </span>
+                            )}
+                        </div>
+                        <div className="text-[10px] text-gray-500 flex items-center gap-1">
+                            <Clock size={10} />
+                            {new Date(match.scheduledTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                        </div>
+                    </div>
                 </div>
 
                 <div className="flex-1 flex items-center justify-end gap-4 w-full text-right">
