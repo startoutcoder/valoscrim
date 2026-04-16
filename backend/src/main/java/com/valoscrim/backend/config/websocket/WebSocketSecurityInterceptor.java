@@ -9,24 +9,23 @@ import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
+
+import java.util.Collections;
 
 @Component
 public class WebSocketSecurityInterceptor implements ChannelInterceptor {
 
     private final JwtService jwtService;
-    private final UserDetailsService userDetailsService;
     private final WebSocketSessionManager sessionManager;
 
     public WebSocketSecurityInterceptor(
             JwtService jwtService,
-            UserDetailsService userDetailsService,
             @Lazy WebSocketSessionManager sessionManager) {
         this.jwtService = jwtService;
-        this.userDetailsService = userDetailsService;
         this.sessionManager = sessionManager;
     }
 
@@ -46,11 +45,17 @@ public class WebSocketSecurityInterceptor implements ChannelInterceptor {
 
             if (authHeader != null && authHeader.startsWith("Bearer ")) {
                 String token = authHeader.substring(7);
-                String username = jwtService.extractUsername(token);
 
-                if (username != null) {
-                    UserDetails userDetails = userDetailsService.loadUserByUsername(username);
-                    if (jwtService.isTokenValid(token, userDetails)) {
+                if (jwtService.isTokenValid(token)) {
+                    String username = jwtService.extractUsername(token);
+                    String role = jwtService.extractClaim(token, claims -> claims.get("role", String.class));
+                    if (role == null) role = "ROLE_USER";
+
+                    if (username != null) {
+                        UserDetails userDetails = new org.springframework.security.core.userdetails.User(
+                                username, "", Collections.singletonList(new SimpleGrantedAuthority(role))
+                        );
+
                         UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                                 userDetails, null, userDetails.getAuthorities()
                         );

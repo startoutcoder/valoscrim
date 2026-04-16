@@ -141,7 +141,7 @@ export default function MatchList() {
             try {
                 await api.post(`/matches/${match.id}/join-solo`);
                 showToast("Successfully joined Solo Queue.", 'success');
-                fetchMatches();
+                navigate(`/match/${match.id}`);
             } catch (err: any) {
                 showToast(err.response?.data?.message || "Failed to join lobby", 'error');
             }
@@ -158,7 +158,7 @@ export default function MatchList() {
         try {
             await api.post(`/matches/${match.id}/join?teamId=${myTeamId}`);
             showToast("Team joined successfully!", 'success');
-            fetchMatches();
+            navigate(`/match/${match.id}`);
         } catch (err: any) {
             showToast(err.response?.data?.message || "Failed to join match", 'error');
         }

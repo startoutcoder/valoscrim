@@ -14,11 +14,13 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
 public class AuthenticationService {
+
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
@@ -44,7 +46,12 @@ public class AuthenticationService {
                 .build();
 
         var savedUser = userRepository.save(user);
-        var jwtToken = jwtService.generateToken(savedUser);
+
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("userId", savedUser.getId());
+        claims.put("role", "ROLE_USER");
+
+        var jwtToken = jwtService.generateToken(claims, savedUser);
         var refreshToken = jwtService.generateRefreshToken(savedUser);
 
         saveUserRefreshToken(savedUser, refreshToken);
@@ -63,7 +70,11 @@ public class AuthenticationService {
         var user = userRepository.findByUsernameOrEmail(request.username(), request.username())
                 .orElseThrow();
 
-        var jwtToken = jwtService.generateToken(user);
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("userId", user.getId());
+        claims.put("role", "ROLE_USER");
+
+        var jwtToken = jwtService.generateToken(claims, user);
         var refreshToken = jwtService.generateRefreshToken(user);
 
         saveUserRefreshToken(user, refreshToken);
@@ -90,7 +101,11 @@ public class AuthenticationService {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid refresh token");
         }
 
-        String accessToken = jwtService.generateToken(user);
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("userId", user.getId());
+        claims.put("role", "ROLE_USER");
+
+        String accessToken = jwtService.generateToken(claims, user);
         return new AuthenticationResponse(accessToken, refreshToken);
     }
 

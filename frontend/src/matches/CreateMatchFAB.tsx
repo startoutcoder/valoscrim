@@ -12,7 +12,7 @@ export default function CreateMatchFAB() {
     const [isOpen, setIsOpen] = useState(false);
     const [mode, setMode] = useState<'SOLO' | 'TEAM'>('SOLO');
     const [mapSelectionMode, setMapSelectionMode] = useState<'VETO' | 'SELECT'>('VETO');
-    const [serverLocation, setServerLocation] = useState('SEOUL'); // 기본 서버를 서울로 설정
+    const [serverLocation, setServerLocation] = useState('SEOUL');
     const [loading, setLoading] = useState(false);
 
     const [selectedTeamId, setSelectedTeamId] = useState<number | string>('');

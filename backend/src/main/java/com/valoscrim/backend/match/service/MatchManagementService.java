@@ -103,7 +103,7 @@ public class MatchManagementService {
         matchLineupService.initializeLineupForTeam(savedMatch, homeTeam, MatchSide.HOME);
 
         ScrimMatch persisted = matchRepository.save(savedMatch);
-        return matchMapper.toMatchResponse(persisted);
+        return matchMapper.toMatchResponse(persisted, username);
     }
 
     @Transactional
@@ -146,7 +146,8 @@ public class MatchManagementService {
 
         match.addPlayer(hostPlayer);
 
-        return matchMapper.toMatchResponse(matchRepository.save(match));
+        ScrimMatch savedMatch = matchRepository.save(match);
+        return matchMapper.toMatchResponse(savedMatch, username);
     }
 
     public void joinLobby(Long matchId, Long challengingTeamId, String username) {
@@ -300,4 +301,6 @@ public class MatchManagementService {
             throw new IllegalStateException("A team must have at least 5 members to enter a team match");
         }
     }
+
+
 }

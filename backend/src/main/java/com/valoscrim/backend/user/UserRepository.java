@@ -43,4 +43,15 @@ public interface UserRepository extends JpaRepository<User, Long> {
        OR u.displayName = :identifier
     """)
     Optional<User> findProfileByIdentifier(@Param("identifier") String identifier);
+
+    @Query("""
+        SELECT DISTINCT u
+        FROM User u
+        LEFT JOIN FETCH u.memberships m
+        LEFT JOIN FETCH m.team t
+        LEFT JOIN FETCH t.members tm
+        LEFT JOIN FETCH tm.user
+        WHERE u.username = :username
+    """)
+    Optional<User> findUserWithTeamAndMembers(@Param("username") String username);
 }

@@ -1,3 +1,4 @@
+// file: backend/src/main/java/com/valoscrim/backend/match/mapper/MatchMapper.java
 package com.valoscrim.backend.match.mapper;
 
 import com.valoscrim.backend.common.enums.MatchSide;
@@ -12,12 +13,16 @@ public class MatchMapper {
 
     private static final int SOLO_MAX_PLAYERS = 10;
 
-
-    public MatchResponse toMatchResponse(ScrimMatch match) {
+    public MatchResponse toMatchResponse(ScrimMatch match, String username) {
         Integer homeTeamAverageMmr = null;
         Integer awayTeamAverageMmr = null;
         Integer playerCount = null;
         Integer maxPlayers = null;
+        boolean isParticipating = false;
+        if (match.getPlayers() != null && username != null) {
+            isParticipating = match.getPlayers().stream()
+                    .anyMatch(p -> p.getUser() != null && username.equals(p.getUser().getUsername()));
+        }
 
         if (match.getMatchType() == MatchType.SOLO) {
             homeTeamAverageMmr = calculateMatchAverageMmr(match, MatchType.SOLO, null);
@@ -41,7 +46,8 @@ public class MatchMapper {
                 maxPlayers,
                 match.getScheduledTime(),
                 match.getStatus(),
-                match.getServerLocation()
+                match.getServerLocation(),
+                isParticipating
         );
     }
 
@@ -74,6 +80,4 @@ public class MatchMapper {
         }
         return avg > 0 ? (int) Math.round(avg) : null;
     }
-
-
 }

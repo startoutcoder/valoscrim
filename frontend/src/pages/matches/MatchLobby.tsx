@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../../api/axios';
 import {
@@ -16,7 +16,8 @@ import {
     Repeat,
     Save,
     Edit3,
-    X
+    X,
+    LogOut, Swords
 } from 'lucide-react';
 import { Toast, type ToastType } from '../../UI/Toast';
 import { Client } from '@stomp/stompjs';
@@ -53,6 +54,7 @@ interface MatchLobbyDetail {
     players?: LobbyPlayer[];
     teamHome?: LobbyTeam;
     teamAway?: LobbyTeam;
+    serverLocation?: string;
 }
 
 const MAP_IMAGES: Record<string, string> = {
@@ -83,7 +85,6 @@ export default function MatchLobby() {
     const [toast, setToast] = useState<{ msg: string; type: ToastType } | null>(null);
 
     const [bannedMaps, setBannedMaps] = useState<string[]>([]);
-    const [timeLeft, setTimeLeft] = useState(10);
 
     const isFetching = useRef(false);
     const stompClientRef = useRef<Client | null>(null);
@@ -120,7 +121,8 @@ export default function MatchLobby() {
         ? isSoloParticipant
         : !!homeMember && myTeamRole === 'OWNER';
     const canReschedule = !isSolo && isTeamOwner;
-    const canLeaveLobby = isSolo && isSoloParticipant;
+
+    const canLeaveLobby = isSolo ? isSoloParticipant : canManageTeamLobby;
 
     const totalBans = bannedMaps.length;
     const currentPhase = Math.min(Math.floor(totalBans / 2) + 1, 5);
@@ -157,29 +159,6 @@ export default function MatchLobby() {
         if (canManage(match.teamAway)) return match.teamAway;
         return null;
     }, [match, user, isSolo]);
-
-    useEffect(() => {
-        if (!isMyTurn) {
-            setTimeLeft(10);
-            return;
-        }
-
-        const timerId = setInterval(() => {
-            setTimeLeft((prev) => Math.max(0, prev - 1));
-        }, 1000);
-
-        return () => clearInterval(timerId);
-    }, [isMyTurn, totalBans]);
-
-    useEffect(() => {
-        if (isMyTurn && timeLeft === 0) {
-            const availableMaps = ALL_MAPS.filter(m => !bannedMaps.includes(m));
-            if (availableMaps.length > 0) {
-                const randomMap = availableMaps[Math.floor(Math.random() * availableMaps.length)];
-                handleBanMap(randomMap);
-            }
-        }
-    }, [timeLeft, isMyTurn, bannedMaps]);
 
     const rawWsUrl = import.meta.env.VITE_WS_URL || 'http://localhost:8080/ws';
     const sockJsUrl = rawWsUrl.replace('wss://', 'https://').replace('ws://', 'http://');
@@ -354,7 +333,7 @@ export default function MatchLobby() {
         }
     };
 
-    const handleBanMap = async (mapName: string) => {
+    const handleBanMap = useCallback(async (mapName: string) => {
         if (!match || !isMyTurn || bannedMaps.includes(mapName)) return;
 
         if (stompClientRef.current?.connected) {
@@ -383,7 +362,15 @@ export default function MatchLobby() {
                 });
             }
         }
-    };
+    }, [match, isMyTurn, bannedMaps, matchId, user?.username]);
+
+    const handleTimeout = useCallback(() => {
+        const availableMaps = ALL_MAPS.filter(m => !bannedMaps.includes(m));
+        if (availableMaps.length > 0) {
+            const randomMap = availableMaps[Math.floor(Math.random() * availableMaps.length)];
+            handleBanMap(randomMap);
+        }
+    }, [bannedMaps, handleBanMap]);
 
     const handleSelectMap = async (mapName: string) => {
         if (!canModifyMatchDetails) return;
@@ -434,9 +421,15 @@ export default function MatchLobby() {
     };
 
     const handleLeave = async () => {
-        if (!window.confirm('Are you sure you want to leave?')) return;
+        const confirmMsg = isSolo
+            ? 'Are you sure you want to leave this lobby?'
+            : 'Are you sure you want to pull your entire team out of this lobby?';
+
+        if (!window.confirm(confirmMsg)) return;
+
         try {
             await api.post(`/matches/${matchId}/leave`);
+            setToast({ msg: "Successfully left the match.", type: "success" });
             navigate('/matches');
         } catch (err: any) {
             setToast({
@@ -479,6 +472,45 @@ export default function MatchLobby() {
     return (
         <div className="max-w-6xl mx-auto pb-20 space-y-8">
             {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
+
+            <div className="bg-[#1f2937] border border-gray-700 rounded-xl p-6 shadow-lg flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                    <div className="bg-[#ff4655]/20 p-3 rounded-lg text-[#ff4655]">
+                        <Swords size={32} />
+                    </div>
+                    <div>
+                        <h1 className="text-2xl font-bold text-white uppercase tracking-wider">
+                            {match.matchType === 'SOLO' ? 'Solo Queue Lobby' : 'Team Scrim Lobby'}
+                        </h1>
+                        <p className="text-gray-400 text-sm mt-1 flex items-center gap-2">
+                            <span>Status: <strong className="text-blue-400">{match.status}</strong></span>
+                            <span>•</span>
+                            <span>Region: <strong className="text-green-400">{match.serverLocation || 'SEOUL'}</strong></span>
+                        </p>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-3 w-full md:w-auto">
+                    {canReadyUp && (
+                        <button
+                            onClick={handleReady}
+                            className="flex-1 md:flex-none bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 px-8 rounded transition-colors shadow-lg uppercase tracking-widest flex justify-center items-center gap-2"
+                        >
+                            <CheckCircle size={20} /> READY UP
+                        </button>
+                    )}
+
+                    {canLeaveLobby && (
+                        <button
+                            onClick={handleLeave}
+                            className="flex-1 md:flex-none flex justify-center items-center gap-2 bg-gray-800 hover:bg-red-600 text-gray-300 hover:text-white font-bold py-2.5 px-6 rounded transition-colors border border-gray-700 hover:border-red-600 shadow-lg"
+                        >
+                            <LogOut size={18} />
+                            LEAVE
+                        </button>
+                    )}
+                </div>
+            </div>
 
             <div
                 className={`relative h-64 rounded-2xl overflow-hidden border transition-all duration-500 ${
@@ -523,26 +555,6 @@ export default function MatchLobby() {
                     <h1 className="text-4xl font-black text-white tracking-tighter uppercase drop-shadow-lg">
                         Lobby #{match.id}
                     </h1>
-                </div>
-
-                <div className="absolute bottom-6 right-6 z-10 flex gap-3">
-                    {canReadyUp && (
-                        <button
-                            onClick={handleReady}
-                            className="bg-green-600 hover:bg-green-500 text-white font-bold py-3 px-8 rounded-lg shadow-lg transition-all active:scale-95 flex items-center gap-2 border border-green-400/30"
-                        >
-                            <CheckCircle size={20} /> READY UP
-                        </button>
-                    )}
-
-                    {canLeaveLobby && (
-                        <button
-                            onClick={handleLeave}
-                            className="bg-red-500/20 hover:bg-red-500 hover:text-white text-red-500 border border-red-500/50 font-bold py-3 px-6 rounded-lg transition-all"
-                        >
-                            LEAVE
-                        </button>
-                    )}
                 </div>
             </div>
 
@@ -701,19 +713,11 @@ export default function MatchLobby() {
                                     <h2 className="text-2xl font-black text-white uppercase tracking-tight">
                                         Phase {currentPhase}/5
                                     </h2>
-                                    {isMyTurn ? (
-                                        <span className={`text-xs font-bold px-2 py-1 rounded animate-pulse border transition-colors ${
-                                            timeLeft <= 3
-                                                ? 'bg-red-500/20 text-red-400 border-red-500/30'
-                                                : 'bg-green-500/20 text-green-400 border-green-500/30'
-                                        }`}>
-                                            Your Turn ({timeLeft}s)
-                                        </span>
-                                    ) : (
-                                        <span className="bg-gray-700 text-gray-400 text-xs font-bold px-2 py-1 rounded">
-                                            Opponent's Turn
-                                        </span>
-                                    )}
+                                    <VetoTimer
+                                        isMyTurn={isMyTurn}
+                                        totalBans={totalBans}
+                                        onTimeout={handleTimeout}
+                                    />
                                 </div>
                                 <p className="text-[#ff4655] font-bold text-lg flex items-center gap-2">
                                     <Shield size={18} /> {turnText}
@@ -791,7 +795,7 @@ export default function MatchLobby() {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {match.players?.map((player) => {
-                            const rankInfo = getRankInfoFromString(player.currentRank);
+                            const rankInfo = getRankInfoFromString(player.currentRank || '');
 
                             return (
                                 <div
@@ -885,6 +889,65 @@ export default function MatchLobby() {
                 </div>
             )}
         </div>
+    );
+}
+
+function VetoTimer({
+                       isMyTurn,
+                       totalBans,
+                       onTimeout
+                   }: {
+    isMyTurn: boolean;
+    totalBans: number;
+    onTimeout: () => void
+}) {
+    const [timeLeft, setTimeLeft] = useState(10);
+    const timeoutRef = useRef(onTimeout);
+
+    useEffect(() => {
+        timeoutRef.current = onTimeout;
+    }, [onTimeout]);
+
+    useEffect(() => {
+        if (!isMyTurn) {
+            setTimeLeft(10);
+            return;
+        }
+
+        setTimeLeft(10);
+
+        const timerId = setInterval(() => {
+            setTimeLeft((prev) => {
+                if (prev <= 1) {
+                    clearInterval(timerId);
+                    timeoutRef.current();
+                    return 0;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+
+        return () => clearInterval(timerId);
+    }, [isMyTurn, totalBans]);
+
+    if (!isMyTurn) {
+        return (
+            <span className="bg-gray-700 text-gray-400 text-xs font-bold px-2 py-1 rounded">
+                Opponent's Turn
+            </span>
+        );
+    }
+
+    return (
+        <span
+            className={`text-xs font-bold px-2 py-1 rounded animate-pulse border transition-colors ${
+                timeLeft <= 3
+                    ? 'bg-red-500/20 text-red-400 border-red-500/30'
+                    : 'bg-green-500/20 text-green-400 border-green-500/30'
+            }`}
+        >
+            Your Turn ({timeLeft}s)
+        </span>
     );
 }
 
@@ -993,7 +1056,7 @@ function TeamColumn({
 
                 <div className="space-y-2">
                     {starters.map((member) => {
-                        const rankInfo = getRankInfoFromString(member.currentRank);
+                        const rankInfo = getRankInfoFromString(member.currentRank || '');
                         const isSelected = selectedStarterIds.includes(member.id);
                         const isSubOutTarget = selectedStarterOutId === member.id;
 
@@ -1104,7 +1167,7 @@ function TeamColumn({
                 ) : (
                     <div className="space-y-2">
                         {bench.map((member) => {
-                            const rankInfo = getRankInfoFromString(member.currentRank);
+                            const rankInfo = getRankInfoFromString(member.currentRank || '');
 
                             return (
                                 <div

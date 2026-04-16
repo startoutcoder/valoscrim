@@ -23,5 +23,7 @@ public record MatchResponse(
 
         LocalDateTime scheduledTime,
         MatchStatus status,
-        ServerRegion serverLocation
+        ServerRegion serverLocation,
+
+        boolean isParticipating
 ) {}

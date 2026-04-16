@@ -1,11 +1,6 @@
 package com.valoscrim.backend.match.service;
 
-import com.valoscrim.backend.common.enums.LineupSlotStatus;
-import com.valoscrim.backend.common.enums.MatchSide;
-import com.valoscrim.backend.common.enums.MatchType;
-import com.valoscrim.backend.common.enums.ParticipantType;
-import com.valoscrim.backend.common.enums.TeamRole;
-import com.valoscrim.backend.common.enums.MatchStatus;
+import com.valoscrim.backend.common.enums.*;
 import com.valoscrim.backend.match.MatchRepository;
 import com.valoscrim.backend.match.ScrimMatch;
 import com.valoscrim.backend.match.ScrimMatchPlayer;
@@ -27,6 +22,7 @@ public class MatchLobbyService {
 
     private final MatchRepository matchRepository;
     private final SimpMessagingTemplate messagingTemplate;
+    private final MatchReadyManager readyManager;
 
     @Transactional(readOnly = true)
     public MatchLobbyDetailResponse getLobbyDetails(Long matchId) {
@@ -44,61 +40,58 @@ public class MatchLobbyService {
                             p.getUser().getId(),
                             p.getUser().getUsername(),
                             p.getUser().getRiotGameName(),
-                            p.isReady(),
+                            readyManager.isSoloReady(matchId, p.getUser().getId()),
                             p.getUser().getCurrentRank(),
                             null
                     ))
                     .toList();
         } else {
             if (match.getTeamHome() != null) {
-                homeTeam = mapTeamToLobbyTeam(match, match.getTeamHome(), MatchSide.HOME, match.isHomeTeamReady());
+                boolean isHomeReady = readyManager.isTeamReady(matchId, MatchSide.HOME);
+                homeTeam = mapTeamToLobbyTeam(match, match.getTeamHome(), MatchSide.HOME, isHomeReady);
             }
             if (match.getTeamAway() != null) {
-                awayTeam = mapTeamToLobbyTeam(match, match.getTeamAway(), MatchSide.AWAY, match.isAwayTeamReady());
+                boolean isAwayReady = readyManager.isTeamReady(matchId, MatchSide.AWAY);
+                awayTeam = mapTeamToLobbyTeam(match, match.getTeamAway(), MatchSide.AWAY, isAwayReady);
             }
         }
 
         return new MatchLobbyDetailResponse(
-                match.getId(),
-                match.getMatchType().name(),
-                match.getStatus().name(),
-                match.getMapName(),
-                match.getPartyCode(),
-                match.getMapSelectionMode(),
-                match.getServerLocation(),
-                soloPlayers,
-                homeTeam,
-                awayTeam
+                match.getId(), match.getMatchType().name(), match.getStatus().name(),
+                match.getMapName(), match.getPartyCode(), match.getMapSelectionMode(),
+                match.getServerLocation(), soloPlayers, homeTeam, awayTeam
         );
     }
 
-    @Transactional
     public void toggleReady(Long matchId, String username) {
-        ScrimMatch match = matchRepository.findByIdForUpdate(matchId)
+        ScrimMatch match = matchRepository.findByIdWithPlayers(matchId)
                 .orElseThrow(() -> new RuntimeException("Match not found"));
 
         if (match.getMatchType() == MatchType.SOLO) {
-            toggleSoloPlayerReady(match, username);
+            Long userId = getSoloUserId(match, username);
+            readyManager.toggleSoloReady(matchId, userId);
         } else {
-            toggleTeamReady(match, username);
+            MatchSide side = getManagedTeamSide(match, username);
+            assertTeamHasValidReadyLineup(match, side == MatchSide.HOME ? match.getTeamHome() : match.getTeamAway());
+            readyManager.toggleTeamReady(matchId, side);
         }
 
-        matchRepository.save(match);
         messagingTemplate.convertAndSend("/topic/match-" + matchId, "REFRESH");
     }
 
-    @Transactional
     public void setReadyState(Long matchId, String username, boolean ready) {
-        ScrimMatch match = matchRepository.findByIdForUpdate(matchId)
+        ScrimMatch match = matchRepository.findByIdWithPlayers(matchId)
                 .orElseThrow(() -> new RuntimeException("Match not found"));
 
         if (match.getMatchType() == MatchType.SOLO) {
-            setSoloPlayerReady(match, username, ready);
+            Long userId = getSoloUserId(match, username);
+            readyManager.setSoloReady(matchId, userId, ready);
         } else {
-            setTeamReady(match, username, ready);
+            MatchSide side = getManagedTeamSide(match, username);
+            if (ready) assertTeamHasValidReadyLineup(match, side == MatchSide.HOME ? match.getTeamHome() : match.getTeamAway());
+            readyManager.setTeamReady(matchId, side, ready);
         }
 
-        matchRepository.save(match);
         messagingTemplate.convertAndSend("/topic/match-" + matchId, "REFRESH");
     }
 
@@ -107,25 +100,54 @@ public class MatchLobbyService {
         ScrimMatch match = matchRepository.findByIdForUpdate(matchId)
                 .orElseThrow(() -> new RuntimeException("Match not found"));
 
-        if (match.getMatchType() == MatchType.TEAM) {
-            throw new IllegalStateException("Individual leave is not supported for team matches. Ask your captain to adjust the lineup or cancel the lobby.");
+        if (match.getMatchType() == MatchType.SOLO) {
+            handleSoloLeave(match, username);
+        } else {
+            handleTeamLeave(match, username);
         }
+    }
 
+    private void handleTeamLeave(ScrimMatch match, String username) {
+        MatchSide side = getManagedTeamSide(match, username);
+
+        if (side == MatchSide.HOME) {
+            matchRepository.delete(match);
+            readyManager.clearMatch(match.getId());
+            messagingTemplate.convertAndSend("/topic/match-" + match.getId(), "DELETED");
+        } else {
+            Team awayTeam = match.getTeamAway();
+
+            List<ScrimMatchPlayer> awayPlayers = match.getPlayers().stream()
+                    .filter(p -> p.getTeam() != null && p.getTeam().getId().equals(awayTeam.getId()))
+                    .toList();
+            awayPlayers.forEach(match::removePlayer);
+
+            match.setTeamAway(null);
+            match.setStatus(MatchStatus.OPEN);
+
+            readyManager.setTeamReady(match.getId(), MatchSide.AWAY, false);
+            readyManager.setTeamReady(match.getId(), MatchSide.HOME, false);
+
+            matchRepository.save(match);
+            messagingTemplate.convertAndSend("/topic/match-" + match.getId(), "REFRESH");
+        }
+    }
+
+    private void handleSoloLeave(ScrimMatch match, String username) {
         ScrimMatchPlayer playerToRemove = match.getPlayers().stream()
-                .filter(p -> p.getParticipantType() == ParticipantType.SOLO)
-                .filter(p -> p.getUser().getUsername().equals(username))
-                .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("You are not in this match"));
+                .filter(p -> p.getParticipantType() == ParticipantType.SOLO && p.getUser().getUsername().equals(username))
+                .findFirst().orElseThrow(() -> new IllegalArgumentException("You are not in this match"));
 
         match.removePlayer(playerToRemove);
+        readyManager.setSoloReady(match.getId(), playerToRemove.getUser().getId(), false);
 
         long remainingSoloPlayers = match.getPlayers().stream()
-                .filter(p -> p.getParticipantType() == ParticipantType.SOLO)
-                .count();
+                .filter(p -> p.getParticipantType() == ParticipantType.SOLO).count();
 
         if (remainingSoloPlayers == 0) {
             matchRepository.delete(match);
-            messagingTemplate.convertAndSend("/topic/match-" + matchId, "DELETED");
+            readyManager.clearMatch(match.getId());
+            messagingTemplate.convertAndSend("/topic/match-" + match.getId(), "DELETED");
             return;
         }
 
@@ -134,70 +156,25 @@ public class MatchLobbyService {
         }
 
         matchRepository.save(match);
-        messagingTemplate.convertAndSend("/topic/match-" + matchId, "REFRESH");
+        messagingTemplate.convertAndSend("/topic/match-" + match.getId(), "REFRESH");
     }
 
-    private void toggleSoloPlayerReady(ScrimMatch match, String username) {
-        ScrimMatchPlayer player = match.getPlayers().stream()
-                .filter(p -> p.getParticipantType() == ParticipantType.SOLO)
-                .filter(p -> p.getUser().getUsername().equals(username))
+    private Long getSoloUserId(ScrimMatch match, String username) {
+        return match.getPlayers().stream()
+                .filter(p -> p.getParticipantType() == ParticipantType.SOLO && p.getUser().getUsername().equals(username))
+                .map(p -> p.getUser().getId())
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("User is not in this lobby"));
-
-        player.setReady(!player.isReady());
     }
 
-    private void setSoloPlayerReady(ScrimMatch match, String username, boolean ready) {
-        ScrimMatchPlayer player = match.getPlayers().stream()
-                .filter(p -> p.getParticipantType() == ParticipantType.SOLO)
-                .filter(p -> p.getUser().getUsername().equals(username))
-                .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("User is not in this lobby"));
-
-        player.setReady(ready);
-    }
-
-    private void toggleTeamReady(ScrimMatch match, String username) {
-        if (canManageTeamReady(match.getTeamHome(), username)) {
-            assertTeamHasValidReadyLineup(match, match.getTeamHome());
-            match.setHomeTeamReady(!match.isHomeTeamReady());
-            return;
-        }
-
-        if (canManageTeamReady(match.getTeamAway(), username)) {
-            assertTeamHasValidReadyLineup(match, match.getTeamAway());
-            match.setAwayTeamReady(!match.isAwayTeamReady());
-            return;
-        }
-
-        throw new SecurityException("Only the team owner or captain can change ready status");
-    }
-
-    private void setTeamReady(ScrimMatch match, String username, boolean ready) {
-        if (canManageTeamReady(match.getTeamHome(), username)) {
-            if (ready) {
-                assertTeamHasValidReadyLineup(match, match.getTeamHome());
-            }
-            match.setHomeTeamReady(ready);
-            return;
-        }
-
-        if (canManageTeamReady(match.getTeamAway(), username)) {
-            if (ready) {
-                assertTeamHasValidReadyLineup(match, match.getTeamAway());
-            }
-            match.setAwayTeamReady(ready);
-            return;
-        }
-
+    private MatchSide getManagedTeamSide(ScrimMatch match, String username) {
+        if (canManageTeamReady(match.getTeamHome(), username)) return MatchSide.HOME;
+        if (canManageTeamReady(match.getTeamAway(), username)) return MatchSide.AWAY;
         throw new SecurityException("Only the team owner or captain can change ready status");
     }
 
     private boolean canManageTeamReady(Team team, String username) {
-        if (team == null || username == null) {
-            return false;
-        }
-
+        if (team == null || username == null) return false;
         return team.getMembers().stream().anyMatch(member ->
                 member.getUser() != null
                         && username.equals(member.getUser().getUsername())
@@ -218,10 +195,7 @@ public class MatchLobbyService {
     }
 
     private MatchLobbyDetailResponse.LobbyTeam mapTeamToLobbyTeam(
-            ScrimMatch match,
-            Team team,
-            MatchSide side,
-            boolean isTeamReady
+            ScrimMatch match, Team team, MatchSide side, boolean isTeamReady
     ) {
         List<ScrimMatchPlayer> teamPlayers = match.getPlayers().stream()
                 .filter(p -> p.getParticipantType() == ParticipantType.TEAM_ROSTER)
@@ -244,49 +218,31 @@ public class MatchLobbyService {
         members.addAll(bench);
 
         return new MatchLobbyDetailResponse.LobbyTeam(
-                team.getId(),
-                team.getName(),
-                team.getTag(),
-                isTeamReady,
-                members,
-                starters,
-                bench
+                team.getId(), team.getName(), team.getTag(), isTeamReady, members, starters, bench
         );
     }
 
     private MatchLobbyDetailResponse.LobbyPlayer toLobbyPlayer(Team team, ScrimMatchPlayer player, boolean isTeamReady) {
         return new MatchLobbyDetailResponse.LobbyPlayer(
-                player.getUser().getId(),
-                player.getUser().getUsername(),
-                player.getUser().getRiotGameName(),
-                isTeamReady,
-                player.getUser().getCurrentRank(),
-                resolveTeamRole(team, player.getUser().getId())
+                player.getUser().getId(), player.getUser().getUsername(), player.getUser().getRiotGameName(),
+                isTeamReady, player.getUser().getCurrentRank(), resolveTeamRole(team, player.getUser().getId())
         );
     }
 
     private String resolveTeamRole(Team team, Long userId) {
-        if (team == null || userId == null) {
-            return null;
-        }
-
+        if (team == null || userId == null) return null;
         return team.getMembers().stream()
                 .filter(member -> member.getUser() != null && userId.equals(member.getUser().getId()))
                 .map(member -> member.getRole().name())
-                .findFirst()
-                .orElse(null);
+                .findFirst().orElse(null);
     }
 
     @Transactional
     public void removeDisconnectedUserFromOpenLobbies(String username) {
         List<ScrimMatch> participatingMatches = matchRepository.findActiveMatchesByUsernameAndType(
-                MatchStatus.OPEN,
-                username,
-                ParticipantType.SOLO
+                MatchStatus.OPEN, username, ParticipantType.SOLO
         );
-
         for (ScrimMatch match : participatingMatches) {
-            log.info("Removing ghost user {} from match lobby {} (Optimized Search)", username, match.getId());
             leaveMatch(match.getId(), username);
         }
     }
